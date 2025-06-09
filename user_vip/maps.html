@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خريطة الصيدليات والمستشفيات القريبة</title>
+    
+    <!-- إضافة أنماط Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    
+    <!-- إضافة Font Awesome للأيقونات -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+            border: 2px solid #3498db;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, sans-serif;
+            background: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+        .legend {
+            line-height: 18px;
+            color: #555;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: right;
+            margin-left: 8px;
+            opacity: 0.7;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 0 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1><i class="fas fa-map-marked-alt"></i> خريطة الصيدليات والمستشفيات القريبة</h1>
+    
+    <div class="controls">
+        <button onclick="locateUser()"><i class="fas fa-location-arrow"></i> تحديد موقعي</button>
+        <button onclick="searchPharmacies()"><i class="fas fa-prescription-bottle-alt"></i> عرض الصيدليات</button>
+        <button onclick="searchHospitals()"><i class="fas fa-hospital"></i> عرض المستشفيات</button>
+    </div>
+    
+    <div id="map"></div>
+    
+    <!-- إضافة مكتبة Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    
+    <!-- إضافة مكتبة Leaflet EasyButton للتحكم السهل -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+    
+    <!-- إضافة مكتبة Leaflet Geocoder للبحث -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    
+    <script>
+        // تهيئة الخريطة
+        var map = L.map('map').setView([30.0444, 31.2357], 13); // إحداثيات القاهرة كمثال
+
+        // إضافة طبقة OpenStreetMap الأساسية
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // إنشاء أيقونات مخصصة
+        var pharmacyIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+        });
+
+        var hospitalIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2965/2965300.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+        });
+
+        // متغير لتخزين العلامات الحالية
+        var currentMarkers = [];
+
+        // وظيفة لمسح العلامات الحالية
+        function clearMarkers() {
+            currentMarkers.forEach(marker => map.removeLayer(marker));
+            currentMarkers = [];
+        }
+
+        // وظيفة لتحديد موقع المستخدم
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        var userLat = position.coords.latitude;
+                        var userLng = position.coords.longitude;
+                        
+                        map.setView([userLat, userLng], 15);
+                        
+                        // إضافة علامة للمستخدم
+                        var userMarker = L.marker([userLat, userLng], {
+                            icon: L.icon({
+                                iconUrl: 'https://cdn-icons-png.flaticon.com/512/447/447031.png',
+                                iconSize: [32, 32]
+                            })
+                        }).addTo(map);
+                        
+                        userMarker.bindPopup("<b>موقعك الحالي</b>").openPopup();
+                        currentMarkers.push(userMarker);
+                    },
+                    function(error) {
+                        alert("تعذر الحصول على الموقع: " + error.message);
+                    }
+                );
+            } else {
+                alert("المتصفح لا يدعم خدمة تحديد الموقع");
+            }
+        }
+
+        // وظيفة للبحث عن الصيدليات
+        function searchPharmacies() {
+            clearMarkers();
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        var userLat = position.coords.latitude;
+                        var userLng = position.coords.longitude;
+                        
+                        var radius = 2000; // نصف دائرة البحث بالمتر (2 كم)
+                        var url = `https://overpass-api.de/api/interpreter?data=[out:json];(node[amenity=pharmacy](around:${radius},${userLat},${userLng});way[amenity=pharmacy](around:${radius},${userLat},${userLng}););out center;`;
+                        
+                        fetch(url)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.elements.length === 0) {
+                                    alert("لا توجد صيدليات في المنطقة القريبة");
+                                    return;
+                                }
+                                
+                                data.elements.forEach(element => {
+                                    var lat, lng;
+                                    if (element.type === 'node') {
+                                        lat = element.lat;
+                                        lng = element.lon;
+                                    } else if (element.type === 'way') {
+                                        lat = element.center.lat;
+                                        lng = element.center.lon;
+                                    }
+                                    
+                                    var marker = L.marker([lat, lng], {icon: pharmacyIcon})
+                                        .addTo(map)
+                                        .bindPopup("<b>" + (element.tags?.name || "صيدلية") + "</b>");
+                                    
+                                    currentMarkers.push(marker);
+                                });
+                                
+                                // تكبير الخريطة لتناسب جميع العلامات
+                                var group = new L.featureGroup(currentMarkers);
+                                map.fitBounds(group.getBounds().pad(0.1));
+                            })
+                            .catch(error => {
+                                console.error("Error fetching pharmacies:", error);
+                                alert("حدث خطأ أثناء جلب بيانات الصيدليات");
+                            });
+                    },
+                    function(error) {
+                        alert("تعذر الحصول على الموقع: " + error.message);
+                    }
+                );
+            } else {
+                alert("المتصفح لا يدعم خدمة تحديد الموقع");
+            }
+        }
+
+        // وظيفة للبحث عن المستشفيات
+        function searchHospitals() {
+            clearMarkers();
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        var userLat = position.coords.latitude;
+                        var userLng = position.coords.longitude;
+                        
+                        var radius = 5000; // نصف دائرة البحث بالمتر (5 كم)
+                        var url = `https://overpass-api.de/api/interpreter?data=[out:json];(node[amenity=hospital](around:${radius},${userLat},${userLng});way[amenity=hospital](around:${radius},${userLat},${userLng}););out center;`;
+                        
+                        fetch(url)
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.elements.length === 0) {
+                                    alert("لا توجد مستشفيات في المنطقة القريبة");
+                                    return;
+                                }
+                                
+                                data.elements.forEach(element => {
+                                    var lat, lng;
+                                    if (element.type === 'node') {
+                                        lat = element.lat;
+                                        lng = element.lon;
+                                    } else if (element.type === 'way') {
+                                        lat = element.center.lat;
+                                        lng = element.center.lon;
+                                    }
+                                    
+                                    var marker = L.marker([lat, lng], {icon: hospitalIcon})
+                                        .addTo(map)
+                                        .bindPopup("<b>" + (element.tags?.name || "مستشفى") + "</b><br>" + 
+                                                 (element.tags?.healthcare || "مرفق صحي"));
+                                    
+                                    currentMarkers.push(marker);
+                                });
+                                
+                                // تكبير الخريطة لتناسب جميع العلامات
+                                var group = new L.featureGroup(currentMarkers);
+                                map.fitBounds(group.getBounds().pad(0.1));
+                            })
+                            .catch(error => {
+                                console.error("Error fetching hospitals:", error);
+                                alert("حدث خطأ أثناء جلب بيانات المستشفيات");
+                            });
+                    },
+                    function(error) {
+                        alert("تعذر الحصول على الموقع: " + error.message);
+                    }
+                );
+            } else {
+                alert("المتصفح لا يدعم خدمة تحديد الموقع");
+            }
+        }
+
+        // إضافة عنصر تحكم للبحث عن الموقع
+        L.Control.geocoder({
+            defaultMarkGeocode: false,
+            position: 'topleft',
+            placeholder: 'ابحث عن موقع...',
+            errorMessage: 'لم يتم العثور على المكان.'
+        })
+        .on('markgeocode', function(e) {
+            var center = e.geocode.center;
+            map.setView([center.lat, center.lng], 15);
+            
+            var marker = L.marker([center.lat, center.lng])
+                .addTo(map)
+                .bindPopup("<b>" + e.geocode.name + "</b>")
+                .openPopup();
+            
+            currentMarkers.push(marker);
+        })
+        .addTo(map);
+
+        // إضافة وسيلة إيضاح (Legend)
+        var legend = L.control({position: 'bottomright'});
+
+        legend.onAdd = function(map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            div.innerHTML = 
+                '<div><img src="https://images.icon-icons.com/2194/PNG/512/pharmacy_icon_133851.png" width="20" height="20"> صيدلية</div>' +
+                '<div><img src="https://images.icon-icons.com/1465/PNG/512/588hospital_100778.png" width="20" height="20"> مستشفى</div>' +
+                '<div><img src="https://cdn-icons-png.flaticon.com/512/447/447031.png" width="20" height="20"> موقعك</div>';
+            return div;
+        };
+
+        legend.addTo(map);
+
+        // إضافة زر لتحديد الموقع الحالي
+        L.easyButton('fa-location-arrow', function(btn, map) {
+            locateUser();
+        }, 'تحديد موقعي الحالي').addTo(map);
+    </script>
+</body>
+</html>

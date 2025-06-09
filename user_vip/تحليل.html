@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام تحليل التقارير الطبية</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2b7a78;
+            --secondary-color: #3aafa9;
+            --light-color: #feffff;
+            --dark-color: #17252a;
+            --warning-color: #ff6b6b;
+            --success-color: #4caf50;
+        }
+        
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f7fa;
+            color: var(--dark-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: var(--light-color);
+            padding: 20px 0;
+            text-align: center;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        
+        .upload-section {
+            background-color: var(--light-color);
+            border-radius: 10px;
+            padding: 30px;
+            margin: 30px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .upload-area {
+            border: 2px dashed var(--secondary-color);
+            border-radius: 8px;
+            padding: 40px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            background-color: rgba(58, 175, 169, 0.1);
+        }
+        
+        .upload-area p {
+            margin: 0;
+            color: var(--secondary-color);
+            font-size: 1.1rem;
+        }
+        
+        .upload-area i {
+            font-size: 3rem;
+            color: var(--secondary-color);
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        #file-input {
+            display: none;
+        }
+        
+        button {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .results-section {
+            display: none;
+            background-color: var(--light-color);
+            border-radius: 10px;
+            padding: 30px;
+            margin-top: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .summary-card {
+            background-color: #f0f8ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 5px solid var(--secondary-color);
+        }
+        
+        .alert-level {
+            display: inline-block;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .alert-level.high {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        
+        .alert-level.medium {
+            background-color: #ffa502;
+            color: white;
+        }
+        
+        .alert-level.low {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .parameters-list {
+            margin-top: 20px;
+        }
+        
+        .parameter-item {
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            border-left: 5px solid #ddd;
+            transition: all 0.3s ease;
+        }
+        
+        .parameter-item:hover {
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .parameter-item.abnormal {
+            border-left-color: var(--warning-color);
+            background-color: #fff5f5;
+        }
+        
+        .parameter-item.normal {
+            border-left-color: var(--success-color);
+        }
+        
+        .parameter-item h5 {
+            margin: 0 0 10px 0;
+            color: var(--dark-color);
+            font-size: 1.2rem;
+        }
+        
+        .parameter-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        
+        .unit {
+            font-size: 1rem;
+            color: #666;
+            font-weight: normal;
+        }
+        
+        .normal-range {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .explanation {
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            margin-top: 10px;
+        }
+        
+        .more-info {
+            background-color: transparent;
+            color: var(--secondary-color);
+            padding: 5px 10px;
+            border: 1px solid var(--secondary-color);
+            margin-top: 10px;
+        }
+        
+        .more-info:hover {
+            background-color: rgba(58, 175, 169, 0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--secondary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            color: var(--warning-color);
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fff5f5;
+            border-radius: 5px;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 20px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .debug-console {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            header {
+                padding: 15px 0;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .upload-section {
+                padding: 20px;
+            }
+            
+            .upload-area {
+                padding: 30px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>نظام تحليل التقارير الطبية</h1>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="upload-section">
+            <h2>تحليل التقرير الطبي</h2>
+            <p>قم برفع صورة التقرير الطبي (تحليل الدم، الأشعة، وغيرها) وسنقوم بتحليلها لك</p>
+            
+            <div class="upload-area" id="upload-area">
+                <i>📁</i>
+                <p>اسحب وأسقط صورة التقرير هنا أو انقر لاختيار ملف</p>
+                <img id="preview-image" class="preview-image" style="display: none;">
+            </div>
+            
+            <input type="file" id="file-input" accept="image/*">
+            <button id="analyze-btn" disabled>تحليل التقرير</button>
+        </div>
+        
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>جاري تحليل التقرير الطبي...</p>
+        </div>
+        
+        <div class="error-message" id="error-message" style="display: none;"></div>
+        
+        <div class="results-section" id="results-section">
+            <h2>نتائج تحليل التقرير</h2>
+            
+            <div class="summary-card" id="summary-card">
+                <h3>الملخص</h3>
+                <p id="summary-text"></p>
+                <div class="alert-level" id="alert-level"></div>
+            </div>
+            
+            <div class="parameters-list" id="parameters-list">
+                <!-- سيتم ملؤها ديناميكيًا -->
+            </div>
+            
+            <div class="debug-console" id="debug-console" style="display: none;">
+                <h4>معلومات التصحيح</h4>
+                <p id="debug-text"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // عناصر DOM
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const previewImage = document.getElementById('preview-image');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('error-message');
+        const resultsSection = document.getElementById('results-section');
+        const summaryCard = document.getElementById('summary-card');
+        const summaryText = document.getElementById('summary-text');
+        const alertLevel = document.getElementById('alert-level');
+        const parametersList = document.getElementById('parameters-list');
+        const debugConsole = document.getElementById('debug-console');
+        const debugText = document.getElementById('debug-text');
+        
+        // متغير لحفظ النص المستخرج
+        let extractedText = '';
+        
+        // قاعدة بيانات المؤشرات الطبية الموسعة
+        const medicalIndicators = {
+            'wbc': {
+                name: 'كريات الدم البيضاء (WBC)',
+                unit: '10^3/μL',
+                normalRange: '4.0-10.0',
+                explanationHigh: 'ارتفاع كريات الدم البيضاء قد يدل على وجود التهاب أو عدوى في الجسم',
+                explanationLow: 'انخفاض كريات الدم البيضاء قد يشير إلى ضعف في جهاز المناعة'
+            },
+            'rbc': {
+                name: 'كريات الدم الحمراء (RBC)',
+                unit: '10^6/μL',
+                normalRange: '4.5-5.5',
+                explanationHigh: 'ارتفاع كريات الدم الحمراء قد يشير إلى الجفاف أو أمراض الرئة',
+                explanationLow: 'انخفاض كريات الدم الحمراء قد يدل على فقر الدم'
+            },
+            'hgb': {
+                name: 'الهيموغلوبين (HGB)',
+                unit: 'g/dL',
+                normalRange: '13.5-17.5',
+                explanationHigh: 'ارتفاع الهيموغلوبين قد يشير إلى الجفاف أو أمراض الرئة',
+                explanationLow: 'انخفاض الهيموغلوبين يدل على فقر الدم'
+            },
+            'hct': {
+                name: 'الهيماتوكريت (HCT)',
+                unit: '%',
+                normalRange: '40-50',
+                explanationHigh: 'ارتفاع الهيماتوكريت قد يشير إلى الجفاف أو أمراض الرئة',
+                explanationLow: 'انخفاض الهيماتوكريت يدل على فقر الدم'
+            },
+            'plt': {
+                name: 'الصفائح الدموية (PLT)',
+                unit: '10^3/μL',
+                normalRange: '150-450',
+                explanationHigh: 'ارتفاع الصفائح الدموية قد يزيد من خطر الجلطات',
+                explanationLow: 'انخفاض الصفائح الدموية قد يسبب نزيفًا'
+            },
+            'glucose': {
+                name: 'الجلوكوز (Glucose)',
+                unit: 'mg/dL',
+                normalRange: '70-100',
+                explanationHigh: 'ارتفاع الجلوكوز قد يشير إلى مرض السكري',
+                explanationLow: 'انخفاض الجلوكوز قد يسبب الدوخة والإغماء'
+            },
+            'alt': {
+                name: 'إنزيم ALT',
+                unit: 'U/L',
+                normalRange: '7-56',
+                explanationHigh: 'ارتفاع ALT قد يشير إلى مشاكل في الكبد',
+                explanationLow: 'قيمة ALT منخفضة عادة لا تدعو للقلق'
+            },
+            'ast': {
+                name: 'إنزيم AST',
+                unit: 'U/L',
+                normalRange: '8-48',
+                explanationHigh: 'ارتفاع AST قد يشير إلى مشاكل في الكبد أو القلب',
+                explanationLow: 'قيمة AST منخفضة عادة لا تدعو للقلق'
+            },
+            'creatinine': {
+                name: 'الكرياتينين',
+                unit: 'mg/dL',
+                normalRange: '0.6-1.2',
+                explanationHigh: 'ارتفاع الكرياتينين قد يشير إلى مشاكل في الكلى',
+                explanationLow: 'انخفاض الكرياتينين قد يكون بسبب نقص الكتلة العضلية'
+            },
+            'urea': {
+                name: 'اليوريا (Urea)',
+                unit: 'mg/dL',
+                normalRange: '15-40',
+                explanationHigh: 'ارتفاع اليوريا قد يشير إلى مشاكل في الكلى',
+                explanationLow: 'انخفاض اليوريا قد يكون بسبب سوء التغذية'
+            },
+            'bilirubin': {
+                name: 'البيليروبين (Bilirubin)',
+                unit: 'mg/dL',
+                normalRange: '0.1-1.2',
+                explanationHigh: 'ارتفاع البيليروبين قد يشير إلى مشاكل في الكبد أو القناة الصفراوية',
+                explanationLow: 'انخفاض البيليروبين عادة لا يدعو للقلق'
+            }
+        };
+        
+        // أحداث سحب وإسقاط الملف
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = 'rgba(58, 175, 169, 0.2)';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = '';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '';
+            
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelection();
+            }
+        });
+        
+        fileInput.addEventListener('change', handleFileSelection);
+        
+        // معالجة اختيار الملف
+        function handleFileSelection() {
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                
+                // عرض معاينة الصورة
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                    analyzeBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        // حدث تحليل التقرير
+        analyzeBtn.addEventListener('click', analyzeReport);
+        
+        // تحميل اللغة العربية لـ Tesseract
+        async function loadLanguage() {
+            try {
+                await Tesseract.load();
+                await Tesseract.loadLanguage('ara');
+                console.log('تم تحميل اللغة العربية بنجاح');
+            } catch (err) {
+                console.error('خطأ في تحميل اللغة العربية:', err);
+                showError('حدث خطأ في تحميل اللغة العربية. الرجاء المحاولة مرة أخرى.');
+            }
+        }
+        
+        // وظيفة تحليل التقرير
+        async function analyzeReport() {
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('الرجاء اختيار ملف أولاً');
+                return;
+            }
+            
+            // إظهار حالة التحميل
+            loading.style.display = 'block';
+            errorMessage.style.display = 'none';
+            analyzeBtn.disabled = true;
+            resultsSection.style.display = 'none';
+            
+            try {
+                // تحميل اللغة العربية أولاً
+                await loadLanguage();
+                
+                // استخدام Tesseract.js لاستخراج النص من الصورة مع إعدادات محسنة
+                const { data: { text } } = await Tesseract.recognize(
+                    file,
+                    'ara+eng', 
+                    {
+                        logger: m => console.log(m),
+                        tessedit_pageseg_mode: 6, // وضع التجزئة التلقائي
+                        tessedit_char_whitelist: '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ./%-', // حروف مسموح بها
+                        preserve_interword_spaces: 1 // الحفاظ على المسافات
+                    }
+                );
+                
+                extractedText = text;
+                console.log('النص المستخرج:', text);
+                
+                // تحليل النص المستخرج
+                const reportData = parseReportText(text);
+                
+                // عرض النتائج
+                displayResults(reportData, text);
+                
+                // إخفاء حالة التحميل وإظهار النتائج
+                loading.style.display = 'none';
+                resultsSection.style.display = 'block';
+            } catch (err) {
+                console.error('Error analyzing report:', err);
+                showError('حدث خطأ أثناء تحليل التقرير. الرجاء المحاولة مرة أخرى.');
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+                
+                // عرض معلومات التصحيح في حالة الخطأ
+                debugConsole.style.display = 'block';
+                debugText.textContent = `النص المستخرج: ${extractedText}\n\nالخطأ: ${err.message}`;
+            }
+        }
+        
+        // وظيفة تحليل النص المستخرج (محسنة)
+        function parseReportText(text) {
+            const lines = text.split('\n');
+            const results = [];
+            
+            // إضافة دعم لمزيد من الأشكال الشائعة للتقارير
+            const patterns = [
+                // نمط: WBC: 12.5 10^3/μL (4.0-10.0)
+                /([A-Za-z]+)\s*[:=]\s*(\d+\.?\d*)\s*([^\s]+)\s*\((\d+\.?\d*)\s*-\s*(\d+\.?\d*)\)/i,
+                // نمط: الهيموغلوبين 14.2 g/dL (13.5-17.5)
+                /([\u0600-\u06FF\s]+)\s*(\d+\.?\d*)\s*([^\s]+)\s*\((\d+\.?\d*)\s*-\s*(\d+\.?\d*)\)/i,
+                // نمط: WBC 12.5 (4.0-10.0)
+                /([A-Za-z]+)\s+(\d+\.?\d*)\s*\((\d+\.?\d*)\s*-\s*(\d+\.?\d*)\)/i,
+                // نمط: WBC 12.5
+                /([A-Za-z]+)\s+(\d+\.?\d*)/i,
+                // نمط: WBC - 12.5
+                /([A-Za-z]+)\s*-\s*(\d+\.?\d*)/i,
+                // نمط: الهيموغلوبين: 14.2
+                /([\u0600-\u06FF\s]+)\s*[:=]\s*(\d+\.?\d*)/i
+            ];
+            
+            lines.forEach(line => {
+                if (line.trim() === '') return;
+                
+                let matched = false;
+                
+                // المحاولة مع كل الأنماط المعرّفة
+                for (const pattern of patterns) {
+                    const match = line.match(pattern);
+                    if (match) {
+                        const paramName = match[1].trim();
+                        const value = parseFloat(match[2]);
+                        const unit = match[3] || '';
+                        const min = match[4] ? parseFloat(match[4]) : null;
+                        const max = match[5] ? parseFloat(match[5]) : null;
+                        
+                        // البحث عن المؤشر في قاعدة البيانات
+                        const indicatorKey = Object.keys(medicalIndicators).find(key => 
+                            paramName.toLowerCase().includes(key) || 
+                            medicalIndicators[key].name.includes(paramName)
+                        );
+                        
+                        if (indicatorKey) {
+                            const indicator = medicalIndicators[indicatorKey];
+                            const normalRange = min && max ? `${min}-${max}` : indicator.normalRange;
+                            const [rangeMin, rangeMax] = normalRange.split('-').map(Number);
+                            
+                            results.push({
+                                parameter: indicator.name,
+                                value: value,
+                                unit: unit || indicator.unit,
+                                normalRange: normalRange,
+                                status: value < rangeMin ? 'low' : value > rangeMax ? 'high' : 'normal',
+                                explanation: value < rangeMin ? indicator.explanationLow : 
+                                            value > rangeMax ? indicator.explanationHigh : ''
+                            });
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // إذا لم يتم التعرف على النمط، جرب الطريقة القديمة
+                if (!matched) {
+                    for (const [key, indicator] of Object.entries(medicalIndicators)) {
+                        if (line.toLowerCase().includes(key) || line.includes(indicator.name)) {
+                            const valueMatch = line.match(/(\d+\.?\d*)/g);
+                            if (valueMatch && valueMatch.length > 0) {
+                                const value = parseFloat(valueMatch[0]);
+                                const [min, max] = indicator.normalRange.split('-').map(Number);
+                                
+                                results.push({
+                                    parameter: indicator.name,
+                                    value: value,
+                                    unit: indicator.unit,
+                                    normalRange: indicator.normalRange,
+                                    status: value < min ? 'low' : value > max ? 'high' : 'normal',
+                                    explanation: value < min ? indicator.explanationLow : 
+                                                value > max ? indicator.explanationHigh : ''
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+            
+            return results;
+        }
+        
+        // وظيفة عرض النتائج (محسنة)
+        function displayResults(reportData, text) {
+            if (reportData.length === 0) {
+                summaryText.textContent = 'لم يتم التعرف على أي مؤشرات طبية في التقرير';
+                alertLevel.textContent = 'تحذير: نتائج غير مكتملة';
+                alertLevel.className = 'alert-level high';
+                
+                // إضافة نص مساعد
+                const helpText = document.createElement('div');
+                helpText.className = 'error-message';
+                helpText.innerHTML = `
+                    <p>قد يكون السبب في:</p>
+                    <ul>
+                        <li>جودة الصورة غير واضحة</li>
+                        <li>تنسيق التقرير غير معروف</li>
+                        <li>المؤشرات غير مدعومة في النظام</li>
+                    </ul>
+                    <p>الرجاء المحاولة مع صورة أوضح أو تقرير بتنسيق مختلف.</p>
+                `;
+                parametersList.appendChild(helpText);
+                
+                // عرض معلومات التصحيح
+                debugConsole.style.display = 'block';
+                debugText.innerHTML = `
+                    <p><strong>النص المستخرج:</strong></p>
+                    <textarea rows="6" style="width:100%">${text}</textarea>
+                    <p><strong>نصائح:</strong></p>
+                    <ul>
+                        <li>تأكد من أن الصورة واضحة وبدون زوايا مائلة</li>
+                        <li>جرب تصوير التقرير في ضوء جيد</li>
+                        <li>تأكد من أن التقرير يحتوي على مؤشرات معروفة مثل WBC, RBC, HGB</li>
+                    </ul>
+                `;
+                return;
+            }
+            
+            // حساب الملخص
+            const abnormalCount = reportData.filter(item => item.status !== 'normal').length;
+            const totalCount = reportData.length;
+            
+            summaryText.textContent = `يوجد ${abnormalCount} قيم خارج المعدل الطبيعي من أصل ${totalCount}`;
+            
+            // تحديد مستوى التحذير
+            if (abnormalCount === 0) {
+                alertLevel.textContent = 'النتائج طبيعية';
+                alertLevel.className = 'alert-level low';
+            } else if (abnormalCount <= 2) {
+                alertLevel.textContent = 'يوصى بالمتابعة';
+                alertLevel.className = 'alert-level medium';
+            } else {
+                alertLevel.textContent = 'يوصى باستشارة الطبيب';
+                alertLevel.className = 'alert-level high';
+            }
+            
+            // عرض المؤشرات
+            parametersList.innerHTML = '';
+            
+            reportData.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = `parameter-item ${item.status !== 'normal' ? 'abnormal' : 'normal'}`;
+                
+                itemElement.innerHTML = `
+                    <h5>${item.parameter}</h5>
+                    <div class="parameter-value">${item.value} <span class="unit">${item.unit}</span></div>
+                    <div class="normal-range">المعدل الطبيعي: ${item.normalRange}</div>
+                    ${item.status !== 'normal' ? `
+                        <div class="explanation">
+                            <p>${item.explanation}</p>
+                            <button class="more-info">المزيد من المعلومات</button>
+                        </div>
+                    ` : ''}
+                `;
+                
+                parametersList.appendChild(itemElement);
+            });
+            
+            // إخفاء وحدة التصحيح إذا كانت النتائج جيدة
+            debugConsole.style.display = 'none';
+        }
+        
+        // وظيفة عرض الخطأ
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
